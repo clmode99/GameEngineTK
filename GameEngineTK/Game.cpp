@@ -5,11 +5,22 @@
 #include "pch.h"
 #include "Game.h"
 
+#include <PrimitiveBatch.h>
+#include <VertexTypes.h>
+#include <Effects.h>
+#include <CommonStates.h>
+#include <SimpleMath.h>
+
 extern void ExitGame();
 
 using namespace DirectX;
+using namespace DirectX::SimpleMath;
 
 using Microsoft::WRL::ComPtr;
+
+std::unique_ptr<PrimitiveBatch<VertexPositionColor>> g_primitiveBatch;
+std::unique_ptr<BasicEffect> g_basicEffect;
+ComPtr<ID3D11InputLayout> g_inputLayout;
 
 Game::Game() :
     m_window(0),
@@ -36,6 +47,25 @@ void Game::Initialize(HWND window, int width, int height)
     m_timer.SetFixedTimeStep(true);
     m_timer.SetTargetElapsedSeconds(1.0 / 60);
     */
+	
+	// TODO:èâä˙âªèàóùÇÕÇ±Ç±
+	g_primitiveBatch = std::make_unique<PrimitiveBatch<VertexPositionColor>>(m_d3dContext.Get());
+
+	g_basicEffect = std::make_unique<BasicEffect>(m_d3dDevice.Get());
+
+	g_basicEffect->SetProjection(XMMatrixOrthographicOffCenterRH(0,
+		m_outputWidth, m_outputHeight, 0, 0, 1));
+	g_basicEffect->SetVertexColorEnabled(true);
+
+	void const* shaderByteCode;
+	size_t byteCodeLength;
+
+	g_basicEffect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
+
+	m_d3dDevice->CreateInputLayout(VertexPositionColor::InputElements,
+		VertexPositionColor::InputElementCount,
+		shaderByteCode, byteCodeLength,
+		g_inputLayout.GetAddressOf());
 }
 
 // Executes the basic game loop.
@@ -56,6 +86,8 @@ void Game::Update(DX::StepTimer const& timer)
 
     // TODO: Add your game logic here.
     elapsedTime;
+
+	// TODO:çXêVèàóù
 }
 
 // Draws the scene.
@@ -69,7 +101,21 @@ void Game::Render()
 
     Clear();
 
-    // TODO: Add your rendering code here.
+	// TODO:ï`âÊèàóù
+	CommonStates states(m_d3dDevice.Get());
+	m_d3dContext->OMSetBlendState(states.Opaque(), nullptr, 0xFFFFFFFF);		// OpaqueÅÅïsìßñæ
+	m_d3dContext->OMSetDepthStencilState(states.DepthNone(), 0);
+	m_d3dContext->RSSetState(states.CullNone());
+
+	g_basicEffect->Apply(m_d3dContext.Get());
+	m_d3dContext->IASetInputLayout(g_inputLayout.Get());
+
+	g_primitiveBatch->Begin();
+	g_primitiveBatch->DrawLine(
+		VertexPositionColor(Vector3(0, 0, 0),Color(1, 1, 1)),
+		VertexPositionColor(Vector3(100, 100, 0), Color(1, 1, 1))
+	);
+	g_primitiveBatch->End();
 
     Present();
 }
