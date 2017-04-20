@@ -5,22 +5,14 @@
 #include "pch.h"
 #include "Game.h"
 
-#include <PrimitiveBatch.h>
-#include <VertexTypes.h>
-#include <Effects.h>
-#include <CommonStates.h>
-#include <SimpleMath.h>
-
 extern void ExitGame();
+
+using namespace std;
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 using Microsoft::WRL::ComPtr;
-
-std::unique_ptr<PrimitiveBatch<VertexPositionColor>> g_primitiveBatch;
-std::unique_ptr<BasicEffect> g_basicEffect;
-ComPtr<ID3D11InputLayout> g_inputLayout;
 
 Game::Game() :
     m_window(0),
@@ -49,23 +41,27 @@ void Game::Initialize(HWND window, int width, int height)
     */
 	
 	// TODO:初期化処理はここ
-	g_primitiveBatch = std::make_unique<PrimitiveBatch<VertexPositionColor>>(m_d3dContext.Get());
+	m_batch = make_unique<PrimitiveBatch<VertexPositionColor>>(m_d3dContext.Get());
 
-	g_basicEffect = std::make_unique<BasicEffect>(m_d3dDevice.Get());
+	m_effect = make_unique<BasicEffect>(m_d3dDevice.Get());
 
-	g_basicEffect->SetProjection(XMMatrixOrthographicOffCenterRH(0,
+	m_effect->SetProjection(XMMatrixOrthographicOffCenterRH(0,
 		m_outputWidth, m_outputHeight, 0, 0, 1));
-	g_basicEffect->SetVertexColorEnabled(true);
+	m_effect->SetVertexColorEnabled(true);
 
 	void const* shaderByteCode;
 	size_t byteCodeLength;
 
-	g_basicEffect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
+	m_effect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
 
 	m_d3dDevice->CreateInputLayout(VertexPositionColor::InputElements,
 		VertexPositionColor::InputElementCount,
 		shaderByteCode, byteCodeLength,
-		g_inputLayout.GetAddressOf());
+		m_inputLayout.GetAddressOf());
+
+	m_states = make_unique<CommonStates>(m_d3dDevice.Get());
+
+	m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
 }
 
 // Executes the basic game loop.
@@ -88,6 +84,7 @@ void Game::Update(DX::StepTimer const& timer)
     elapsedTime;
 
 	// TODO:更新処理
+	m_camera->Update();
 }
 
 // Draws the scene.
@@ -102,20 +99,47 @@ void Game::Render()
     Clear();
 
 	// TODO:描画処理
-	CommonStates states(m_d3dDevice.Get());
-	m_d3dContext->OMSetBlendState(states.Opaque(), nullptr, 0xFFFFFFFF);		// Opaque＝不透明
-	m_d3dContext->OMSetDepthStencilState(states.DepthNone(), 0);
-	m_d3dContext->RSSetState(states.CullNone());
+	m_d3dContext->OMSetBlendState(m_states->Opaque(), nullptr, 0xFFFFFFFF);		// Opaque＝不透明
+	m_d3dContext->OMSetDepthStencilState(m_states->DepthNone(), 0);
+	m_d3dContext->RSSetState(m_states->CullNone());
 
-	g_basicEffect->Apply(m_d3dContext.Get());
-	m_d3dContext->IASetInputLayout(g_inputLayout.Get());
+	//m_view = Matrix::CreateLookAt(Vector3(0.f, 0.f, 2.f),	// カメラ視点
+	//		 Vector3(0, 0, 0),		// カメラ参照点
+	//		 Vector3(0, 1, 0)		// 画面の上方向ベクトル
+	//);
 
-	g_primitiveBatch->Begin();
-	g_primitiveBatch->DrawLine(
+	m_view = m_camera->GetCameraMatrix();
+	m_proj = Matrix::CreatePerspectiveFieldOfView(XM_PI / 4.f,	// 視野角
+		float(m_outputWidth) / float(m_outputHeight),			// アスペクト比
+		0.1f,			// nearクリップ
+		10.f			// farクリップ
+	);
+
+	m_effect->SetView(m_view);
+	m_effect->SetProjection(m_proj);
+
+	m_effect->Apply(m_d3dContext.Get());
+	m_d3dContext->IASetInputLayout(m_inputLayout.Get());
+
+	m_batch->Begin();
+	m_batch->DrawLine(
 		VertexPositionColor(Vector3(0, 0, 0),Color(1, 1, 1)),
 		VertexPositionColor(Vector3(100, 100, 0), Color(1, 1, 1))
 	);
-	g_primitiveBatch->End();
+
+	// これは3D用
+	VertexPositionColor v1(Vector3(0.f, 0.5f, 0.5f),    Colors::Yellow);
+	VertexPositionColor v2(Vector3(0.5f, -0.5f, 0.5f),  Colors::Yellow);
+	VertexPositionColor v3(Vector3(-0.5f, -0.5f, 0.5f), Colors::Yellow);
+
+	// これは2D用
+	//VertexPositionColor v1(Vector3(400.f, 150.f, 0.f), Colors::Yellow);
+	//VertexPositionColor v2(Vector3(600.f, 450.f, 0.f), Colors::Yellow);
+	//VertexPositionColor v3(Vector3(200.f, 450.f, 0.f), Colors::Yellow);
+
+	m_batch->DrawTriangle(v1, v2, v3);
+	
+	m_batch->End();
 
     Present();
 }
