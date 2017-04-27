@@ -11,6 +11,9 @@
 #include <Effects.h>
 #include <CommonStates.h>
 #include <SimpleMath.h>
+#include <Model.h>
+
+#include <vector>
 
 #include "DebugCamera.h"
 
@@ -79,5 +82,18 @@ private:
 	DirectX::SimpleMath::Matrix m_view;
 	DirectX::SimpleMath::Matrix m_proj;		// 射影行列
 
-	std::unique_ptr<DebugCamera> m_camera;
+	std::unique_ptr<DebugCamera>            m_camera;
+
+	std::unique_ptr<DirectX::EffectFactory>   m_factory;		// エフェクトファクトリー(モデル描画に必要)
+	
+	static const int GROUND_NUM;
+	static const int GROUND_WIDTH_HEIGHT;
+	std::unique_ptr<DirectX::Model>           m_ground;			// 地面
+	std::vector<DirectX::SimpleMath::Matrix>  m_ground_world;	// 地面用のワールド行列
+	//std::unique_ptr<DirectX::Model>         m_skydome;		// 天球
+
+	static const int SPHERE_NUM;
+	std::unique_ptr<DirectX::Model>           m_sphere;			// 球
+	std::vector<DirectX::SimpleMath::Matrix>  m_sphere_world;	// 球用のワールド行列
+
 };

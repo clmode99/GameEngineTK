@@ -210,6 +210,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
 
+	case WM_CHAR:
+		if(wParam==0x1B)		// 0x1B=ESCキー。ESCキーで終了する
+			PostQuitMessage(0);
+
+		break;
+
     case WM_DESTROY:
         PostQuitMessage(0);
         break;

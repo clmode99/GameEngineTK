@@ -5,6 +5,8 @@
 #include "pch.h"
 #include "Game.h"
 
+#include <iterator>
+
 extern void ExitGame();
 
 using namespace std;
@@ -13,6 +15,11 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
 using Microsoft::WRL::ComPtr;
+
+const int Game::SPHERE_NUM = 20;			// 球の数
+const int Game::GROUND_WIDTH_HEIGHT = 200;	// 床の幅と高さ
+const int Game::GROUND_NUM = Game::GROUND_WIDTH_HEIGHT*Game::GROUND_WIDTH_HEIGHT;	// 床の数
+
 
 Game::Game() :
     m_window(0),
@@ -62,6 +69,57 @@ void Game::Initialize(HWND window, int width, int height)
 	m_states = make_unique<CommonStates>(m_d3dDevice.Get());
 
 	m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
+
+	m_factory = make_unique<EffectFactory>(m_d3dDevice.Get());
+	m_factory->SetDirectory(L"Recources");		// テクスチャ(.dds)のパス設定
+	m_ground  = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Ground1m.cmo", *m_factory);
+	//m_skydome = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Skydome.cmo", *m_factory);
+	m_sphere = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Sphere.cmo", *m_factory);
+
+	m_sphere_world.resize(SPHERE_NUM);
+	m_ground_world.resize(GROUND_NUM);
+
+	int a = m_ground_world.size();
+
+	// 球の初期化
+	for (int i = 0; i < SPHERE_NUM; ++i)
+	{
+		Matrix trans;
+		Matrix rotate;
+
+		const  float ANGLE = XM_2PI / (SPHERE_NUM / 2);		// １つごとの角度
+
+		if (i < (SPHERE_NUM / 2))		// 内側の円
+		{
+			trans  = Matrix::CreateTranslation(Vector3(20.0f, 0.0f, 0.0f));
+			rotate = Matrix::CreateRotationY(ANGLE * i);
+		}
+		else							// 外側の円
+		{
+			static auto cnt = 0;
+
+			trans  = Matrix::CreateTranslation(Vector3(40.0f, 0.0f, 0.0f));
+			rotate = Matrix::CreateRotationY(ANGLE * cnt);
+
+			++cnt;
+		}
+
+		// 行列合成。順番大事！S(Scale)R(Rotation)T(Translation)の順番が一般的
+		m_sphere_world[i] = trans * rotate;
+	}
+
+	// 床の初期化
+	for (int i = 0; i < GROUND_WIDTH_HEIGHT; ++i)		// 一応高さ
+	{
+		for (int j = 0; j < GROUND_WIDTH_HEIGHT; ++j)	// 一応幅
+		{
+			Matrix sort = Matrix::CreateTranslation(Vector3(j, 0.0f, i));	// 並べる行列
+			Matrix trans = Matrix::CreateTranslation(Vector3(-100.0f, -10.0f, -100.0f));
+
+			m_ground_world[(i*GROUND_WIDTH_HEIGHT) + j] = sort * trans;
+		}
+	}
+
 }
 
 // Executes the basic game loop.
@@ -85,6 +143,32 @@ void Game::Update(DX::StepTimer const& timer)
 
 	// TODO:更新処理
 	m_camera->Update();
+
+	// ワールド行列を計算
+	//Matrix double_scale = Matrix::CreateScale(2.0f);								// 拡大縮小
+	//Matrix trans        = Matrix::CreateTranslation(Vector3(0.0f, 10.0f, 0.0f));	// 移動
+	//Matrix rotate_z     = Matrix::CreateRotationZ(3.14f);							// 回転
+
+	// 回転させる行列計算
+	for (int i = 0; i < SPHERE_NUM; ++i)
+	{
+		int angle   = 1;
+		int angle_r = -1;
+
+		Matrix rotate;
+
+		if (i < (SPHERE_NUM / 2))		// 内側の円
+		{
+			rotate = Matrix::CreateRotationY(XMConvertToRadians(angle));
+		}
+		else							// 外側の円
+		{
+			rotate = Matrix::CreateRotationY(XMConvertToRadians(angle_r));
+		}
+
+		m_sphere_world[i] *= rotate;
+
+	}
 }
 
 // Draws the scene.
@@ -96,7 +180,7 @@ void Game::Render()
         return;
     }
 
-    Clear();
+    Clear();	// 深度バッファのクリア
 
 	// TODO:描画処理
 	m_d3dContext->OMSetBlendState(m_states->Opaque(), nullptr, 0xFFFFFFFF);		// Opaque＝不透明
@@ -108,24 +192,41 @@ void Game::Render()
 	//		 Vector3(0, 1, 0)		// 画面の上方向ベクトル
 	//);
 
-	m_view = m_camera->GetCameraMatrix();
-	m_proj = Matrix::CreatePerspectiveFieldOfView(XM_PI / 4.f,	// 視野角
+	m_world = Matrix::Identity;
+
+	m_view  = m_camera->GetCameraMatrix();
+	m_proj  = Matrix::CreatePerspectiveFieldOfView(XM_PI / 4.f,	// 視野角
 		float(m_outputWidth) / float(m_outputHeight),			// アスペクト比
 		0.1f,			// nearクリップ
-		10.f			// farクリップ
+		500.f			// farクリップ
 	);
 
+	m_effect->SetWorld(m_world);
 	m_effect->SetView(m_view);
 	m_effect->SetProjection(m_proj);
 
 	m_effect->Apply(m_d3dContext.Get());
 	m_d3dContext->IASetInputLayout(m_inputLayout.Get());
 
+	//m_ground ->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);		// 第６引数をtrueにするとワイヤー表示になる(デフォルトはfalse)
+	//m_skydome->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);
+	
+	for (vector<Matrix>::iterator i = m_sphere_world.begin(); i != m_sphere_world.end(); ++i)
+	{
+		m_sphere->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
+	}
+
+	for (vector<Matrix>::iterator i = m_ground_world.begin(); i != m_ground_world.end(); ++i)
+	{
+		m_ground->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
+	}
+
+
 	m_batch->Begin();
-	m_batch->DrawLine(
-		VertexPositionColor(Vector3(0, 0, 0),Color(1, 1, 1)),
-		VertexPositionColor(Vector3(100, 100, 0), Color(1, 1, 1))
-	);
+	//m_batch->DrawLine(
+	//	VertexPositionColor(Vector3(0, 0, 0),Color(1, 1, 1)),
+	//	VertexPositionColor(Vector3(100, 100, 0), Color(1, 1, 1))
+	//);
 
 	// これは3D用
 	VertexPositionColor v1(Vector3(0.f, 0.5f, 0.5f),    Colors::Yellow);
@@ -137,7 +238,7 @@ void Game::Render()
 	//VertexPositionColor v2(Vector3(600.f, 450.f, 0.f), Colors::Yellow);
 	//VertexPositionColor v3(Vector3(200.f, 450.f, 0.f), Colors::Yellow);
 
-	m_batch->DrawTriangle(v1, v2, v3);
+	//m_batch->DrawTriangle(v1, v2, v3);
 	
 	m_batch->End();
 
