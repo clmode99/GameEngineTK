@@ -56,6 +56,8 @@ void Game::Initialize(HWND window, int width, int height)
 	m_sprite_batch = make_unique<SpriteBatch>(m_d3dContext.Get());
 	m_sprite_font = make_unique<SpriteFont>(m_d3dDevice.Get(), L"Recources/myfile.spritefont");
 
+	m_keyboard = make_unique<Keyboard>();
+
 	m_effect = make_unique<BasicEffect>(m_d3dDevice.Get());
 
 	m_effect->SetProjection(XMMatrixOrthographicOffCenterRH(0,
@@ -83,6 +85,7 @@ void Game::Initialize(HWND window, int width, int height)
 	m_skydome = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Skydome.cmo", *m_factory);
 	//m_sphere = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Sphere.cmo", *m_factory);
 	m_teapot = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Teapot.cmo", *m_factory);
+	m_head = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Head.cmo", *m_factory);
 
 	//m_sphere_world.resize(SPHERE_NUM);
 	m_ground_world.resize(GROUND_NUM);
@@ -174,6 +177,40 @@ void Game::Update(DX::StepTimer const& timer)
 
 	// TODO:更新処理
 	m_camera->Update();
+
+	// キーボード更新
+	auto kb = m_keyboard->GetState();
+
+	static float head_angle = 0.0f;
+	// モデル移動
+	if (kb.W)		// 前進
+	{
+		//Vector3 move_front(0.0f, 0.0f, -0.1f);
+		Vector3 move_front2(cosf(XMConvertToRadians(90 - head_angle)), 0.0f, sinf(XMConvertToRadians(90 - head_angle)));
+		move_front2.Normalize();
+		move_front2 *= -0.1f;
+		m_head_pos += move_front2;
+	}
+	if (kb.S)		// 後退
+	{
+		//Vector3 move_back(0.0f, 0.0f, 0.1f);
+		Vector3 move_back2(cosf(XMConvertToRadians(90 - head_angle)), 0.0f, sinf(XMConvertToRadians(90 - head_angle)));
+		move_back2.Normalize();
+		move_back2 *= 0.1f;
+		m_head_pos += move_back2;
+	}
+
+	if (kb.A)		// 左旋回
+	{
+		++head_angle;
+	}
+	if (kb.D)		// 右旋回
+	{
+		--head_angle;
+	}
+	Matrix head_trans        = Matrix::CreateTranslation(m_head_pos);
+	m_head_world_rotate = Matrix::CreateRotationY(XMConvertToRadians(head_angle));
+	m_head_world = m_head_world_rotate * head_trans;	// ワールド行列変換
 
 	// ワールド行列を計算
 	//Matrix double_scale = Matrix::CreateScale(2.0f);								// 拡大縮小
@@ -286,10 +323,12 @@ void Game::Render()
 
 	m_ground->Draw(m_d3dContext.Get(), *m_states, Matrix::Identity, m_view, m_proj);		// タイリングした地面を描画
 	
-	for (vector<Matrix>::iterator i = m_teapot_world.begin(); i != m_teapot_world.end(); ++i)
-	{
-		m_teapot->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
-	}
+	//for (vector<Matrix>::iterator i = m_teapot_world.begin(); i != m_teapot_world.end(); ++i)
+	//{
+	//	m_teapot->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
+	//}
+
+	m_head->Draw(m_d3dContext.Get(), *m_states, m_head_world, m_view, m_proj);
 
 	m_sprite_batch->Begin();
 

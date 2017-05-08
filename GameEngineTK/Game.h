@@ -10,6 +10,7 @@
 #include <VertexTypes.h>
 #include <Effects.h>
 #include <CommonStates.h>
+#include <Keyboard.h>
 #include <SimpleMath.h>
 #include <SpriteBatch.h>
 #include <SpriteFont.h>
@@ -105,10 +106,17 @@ private:
 	std::vector<DirectX::SimpleMath::Matrix>  m_teapot_trans;	// 球用の移動行列
 	std::vector<DirectX::SimpleMath::Vector3> m_teapot_vec;	// 球用の移動行列(Vector3版)
 
+	std::unique_ptr<DirectX::Model> m_head;		// ロボあたま
+	DirectX::SimpleMath::Vector3    m_head_pos;
+	DirectX::SimpleMath::Matrix     m_head_world;
+	DirectX::SimpleMath::Matrix     m_head_world_rotate;
+
 	std::unique_ptr<DirectX::SpriteBatch>  m_sprite_batch;
 	std::unique_ptr<DirectX::SpriteFont>   m_sprite_font;
 	std::wstring                           m_wstr;
 	
+	std::unique_ptr<DirectX::Keyboard> m_keyboard;		// キーボード
+
 	int m_time_frame;
 	int m_auto_move_time_frame;
 };
