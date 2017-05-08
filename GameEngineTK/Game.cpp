@@ -5,7 +5,9 @@
 #include "pch.h"
 #include "Game.h"
 
+#include <ctime>
 #include <iterator>
+#include <sstream>
 
 extern void ExitGame();
 
@@ -16,7 +18,8 @@ using namespace DirectX::SimpleMath;
 
 using Microsoft::WRL::ComPtr;
 
-const int Game::SPHERE_NUM = 20;			// 球の数
+//const int Game::SPHERE_NUM = 20;			// 球の数
+const int Game::TEAPOT_NUM = 20;			// ティーポットの数
 const int Game::GROUND_WIDTH_HEIGHT = 200;	// 床の幅と高さ
 const int Game::GROUND_NUM = Game::GROUND_WIDTH_HEIGHT*Game::GROUND_WIDTH_HEIGHT;	// 床の数
 
@@ -50,6 +53,9 @@ void Game::Initialize(HWND window, int width, int height)
 	// TODO:初期化処理はここ
 	m_batch = make_unique<PrimitiveBatch<VertexPositionColor>>(m_d3dContext.Get());
 
+	m_sprite_batch = make_unique<SpriteBatch>(m_d3dContext.Get());
+	m_sprite_font = make_unique<SpriteFont>(m_d3dDevice.Get(), L"Recources/myfile.spritefont");
+
 	m_effect = make_unique<BasicEffect>(m_d3dDevice.Get());
 
 	m_effect->SetProjection(XMMatrixOrthographicOffCenterRH(0,
@@ -70,43 +76,46 @@ void Game::Initialize(HWND window, int width, int height)
 
 	m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
 
+
 	m_factory = make_unique<EffectFactory>(m_d3dDevice.Get());
 	m_factory->SetDirectory(L"Recources");		// テクスチャ(.dds)のパス設定
-	m_ground  = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Ground1m.cmo", *m_factory);
-	//m_skydome = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Skydome.cmo", *m_factory);
-	m_sphere = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Sphere.cmo", *m_factory);
+	m_ground  = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Ground200m.cmo", *m_factory);
+	m_skydome = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Skydome.cmo", *m_factory);
+	//m_sphere = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Sphere.cmo", *m_factory);
+	m_teapot = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Teapot.cmo", *m_factory);
 
-	m_sphere_world.resize(SPHERE_NUM);
+	//m_sphere_world.resize(SPHERE_NUM);
 	m_ground_world.resize(GROUND_NUM);
-
-	int a = m_ground_world.size();
+	m_teapot_world.resize(TEAPOT_NUM);
+	m_teapot_trans.resize(TEAPOT_NUM);
+	m_teapot_vec.resize(TEAPOT_NUM);
 
 	// 球の初期化
-	for (int i = 0; i < SPHERE_NUM; ++i)
-	{
-		Matrix trans;
-		Matrix rotate;
+	//for (int i = 0; i < SPHERE_NUM; ++i)
+	//{
+	//	Matrix trans;
+	//	Matrix rotate;
 
-		const  float ANGLE = XM_2PI / (SPHERE_NUM / 2);		// １つごとの角度
+	//	const  float ANGLE = XM_2PI / (SPHERE_NUM / 2);		// １つごとの角度
 
-		if (i < (SPHERE_NUM / 2))		// 内側の円
-		{
-			trans  = Matrix::CreateTranslation(Vector3(20.0f, 0.0f, 0.0f));
-			rotate = Matrix::CreateRotationY(ANGLE * i);
-		}
-		else							// 外側の円
-		{
-			static auto cnt = 0;
+	//	if (i < (SPHERE_NUM / 2))		// 内側の円
+	//	{
+	//		trans  = Matrix::CreateTranslation(Vector3(20.0f, 0.0f, 0.0f));
+	//		rotate = Matrix::CreateRotationY(ANGLE * i);
+	//	}
+	//	else							// 外側の円
+	//	{
+	//		static auto cnt = 0;
 
-			trans  = Matrix::CreateTranslation(Vector3(40.0f, 0.0f, 0.0f));
-			rotate = Matrix::CreateRotationY(ANGLE * cnt);
+	//		trans  = Matrix::CreateTranslation(Vector3(40.0f, 0.0f, 0.0f));
+	//		rotate = Matrix::CreateRotationY(ANGLE * cnt);
 
-			++cnt;
-		}
+	//		++cnt;
+	//	}
 
-		// 行列合成。順番大事！S(Scale)R(Rotation)T(Translation)の順番が一般的
-		m_sphere_world[i] = trans * rotate;
-	}
+	//	// 行列合成。順番大事！S(Scale)R(Rotation)T(Translation)の順番が一般的
+	//	m_sphere_world[i] = trans * rotate;
+	//}
 
 	// 床の初期化
 	for (int i = 0; i < GROUND_WIDTH_HEIGHT; ++i)		// 一応高さ
@@ -119,6 +128,28 @@ void Game::Initialize(HWND window, int width, int height)
 			m_ground_world[(i*GROUND_WIDTH_HEIGHT) + j] = sort * trans;
 		}
 	}
+
+	// ティーポットの座標決定
+	srand(static_cast<unsigned int>(time(nullptr)));
+
+	for (int i = 0; i < TEAPOT_NUM; ++i)
+	{
+		Matrix trans;
+
+		// 角度決定
+		float angle_radian = XMConvertToRadians(rand() % 361);		// ０～３６０の間の角度を取得
+		Vector3 vec(cosf(angle_radian), 0.0f, sinf(angle_radian));
+		m_teapot_vec[i] = vec;
+
+		// 距離決定
+		float dir = static_cast<float>(rand() % 96);		// ０～９５の間の距離を取得
+		m_teapot_vec[i] *= dir;
+
+		m_teapot_trans[i] =  Matrix::CreateTranslation(m_teapot_vec[i]);
+
+	}
+	m_time_frame = 0;
+	m_auto_move_time_frame = 0;
 
 }
 
@@ -150,25 +181,56 @@ void Game::Update(DX::StepTimer const& timer)
 	//Matrix rotate_z     = Matrix::CreateRotationZ(3.14f);							// 回転
 
 	// 回転させる行列計算
-	for (int i = 0; i < SPHERE_NUM; ++i)
-	{
-		int angle   = 1;
-		int angle_r = -1;
+	//for (int i = 0; i < SPHERE_NUM; ++i)
+	//{
+	//	int angle   = 1;
+	//	int angle_r = -1;
 
-		Matrix rotate;
+	//	Matrix rotate;
 
-		if (i < (SPHERE_NUM / 2))		// 内側の円
-		{
-			rotate = Matrix::CreateRotationY(XMConvertToRadians(angle));
-		}
-		else							// 外側の円
-		{
-			rotate = Matrix::CreateRotationY(XMConvertToRadians(angle_r));
-		}
+	//	if (i < (SPHERE_NUM / 2))		// 内側の円
+	//	{
+	//		rotate = Matrix::CreateRotationY(XMConvertToRadians(angle));
+	//	}
+	//	else							// 外側の円
+	//	{
+	//		rotate = Matrix::CreateRotationY(XMConvertToRadians(angle_r));
+	//	}
 
-		m_sphere_world[i] *= rotate;
+	//	m_sphere_world[i] *= rotate;
 
+	//}
+
+	// ティーポットの行列更新
+	static float angle_radian = 0.0f;		// スケール
+	angle_radian += 0.02f;
+	float angle_scale = ((sinf(angle_radian) + 1.0f)*2.0f) + 1.0f;		//１～５倍間を行ったり来たり
+
+	float time_step = (m_time_frame - m_auto_move_time_frame) / 600.0f;		// 10秒＝600フレーム
+
+	// デバッグ
+	wstringstream ss;
+	ss << L"TimeStep:"<<time_step << endl;		// サイン角度表示
+
+	m_wstr = ss.str();
+
+	for (int i = 0; i < TEAPOT_NUM; ++i)
+	{		
+		// Y軸に回転
+		Matrix rotate_y = Matrix::CreateRotationY(angle_radian);
+
+		// スケーリング
+		Matrix scale = Matrix::CreateScale(angle_scale);
+
+		// 線形補間で移動
+		Matrix trans;
+		if (time_step < 1.0f)
+			trans = Matrix::CreateTranslation(Vector3::Lerp(m_teapot_vec[i], Vector3::Zero, time_step));
+
+		m_teapot_world[i] = scale * rotate_y * trans;
 	}
+
+	++m_time_frame;
 }
 
 // Draws the scene.
@@ -209,38 +271,31 @@ void Game::Render()
 	m_d3dContext->IASetInputLayout(m_inputLayout.Get());
 
 	//m_ground ->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);		// 第６引数をtrueにするとワイヤー表示になる(デフォルトはfalse)
-	//m_skydome->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);
+	m_skydome->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);
+
+	//for (vector<Matrix>::iterator i = m_sphere_world.begin(); i != m_sphere_world.end(); ++i)
+	//{
+	//	m_sphere->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
+	//}
+
+	// forで回す単純な地面の描画(かなり重い)
+	//for (vector<Matrix>::iterator i = m_ground_world.begin(); i != m_ground_world.end(); ++i)
+	//{
+	//	m_ground->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
+	//}
+
+	m_ground->Draw(m_d3dContext.Get(), *m_states, Matrix::Identity, m_view, m_proj);		// タイリングした地面を描画
 	
-	for (vector<Matrix>::iterator i = m_sphere_world.begin(); i != m_sphere_world.end(); ++i)
+	for (vector<Matrix>::iterator i = m_teapot_world.begin(); i != m_teapot_world.end(); ++i)
 	{
-		m_sphere->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
+		m_teapot->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
 	}
 
-	for (vector<Matrix>::iterator i = m_ground_world.begin(); i != m_ground_world.end(); ++i)
-	{
-		m_ground->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
-	}
+	m_sprite_batch->Begin();
 
+	//m_sprite_font->DrawString(m_sprite_batch.get(), m_wstr.c_str(), XMFLOAT2(0, 0));
 
-	m_batch->Begin();
-	//m_batch->DrawLine(
-	//	VertexPositionColor(Vector3(0, 0, 0),Color(1, 1, 1)),
-	//	VertexPositionColor(Vector3(100, 100, 0), Color(1, 1, 1))
-	//);
-
-	// これは3D用
-	VertexPositionColor v1(Vector3(0.f, 0.5f, 0.5f),    Colors::Yellow);
-	VertexPositionColor v2(Vector3(0.5f, -0.5f, 0.5f),  Colors::Yellow);
-	VertexPositionColor v3(Vector3(-0.5f, -0.5f, 0.5f), Colors::Yellow);
-
-	// これは2D用
-	//VertexPositionColor v1(Vector3(400.f, 150.f, 0.f), Colors::Yellow);
-	//VertexPositionColor v2(Vector3(600.f, 450.f, 0.f), Colors::Yellow);
-	//VertexPositionColor v3(Vector3(200.f, 450.f, 0.f), Colors::Yellow);
-
-	//m_batch->DrawTriangle(v1, v2, v3);
-	
-	m_batch->End();
+	m_sprite_batch->End();
 
     Present();
 }
