@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "DebugCamera.h"
+#include "Camera.h"
 
 // A basic game implementation that creates a D3D11 device and
 // provides a game loop.
@@ -85,7 +86,7 @@ private:
 	DirectX::SimpleMath::Matrix m_view;
 	DirectX::SimpleMath::Matrix m_proj;		// 射影行列
 
-	std::unique_ptr<DebugCamera>            m_camera;
+	//std::unique_ptr<DebugCamera>            m_camera;
 
 	std::unique_ptr<DirectX::EffectFactory>   m_factory;		// エフェクトファクトリー(モデル描画に必要)
 	
@@ -119,4 +120,6 @@ private:
 
 	int m_time_frame;
 	int m_auto_move_time_frame;
+
+	std::unique_ptr<Camera> m_camera;
 };

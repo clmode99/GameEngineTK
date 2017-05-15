@@ -35,21 +35,21 @@ Game::Game() :
 // Initialize the Direct3D resources required to run.
 void Game::Initialize(HWND window, int width, int height)
 {
-    m_window = window;
-    m_outputWidth = std::max(width, 1);
-    m_outputHeight = std::max(height, 1);
+	m_window = window;
+	m_outputWidth = std::max(width, 1);
+	m_outputHeight = std::max(height, 1);
 
-    CreateDevice();
+	CreateDevice();
 
-    CreateResources();
+	CreateResources();
 
-    // TODO: Change the timer settings if you want something other than the default variable timestep mode.
-    // e.g. for 60 FPS fixed timestep update logic, call:
-    /*
-    m_timer.SetFixedTimeStep(true);
-    m_timer.SetTargetElapsedSeconds(1.0 / 60);
-    */
-	
+	// TODO: Change the timer settings if you want something other than the default variable timestep mode.
+	// e.g. for 60 FPS fixed timestep update logic, call:
+	/*
+	m_timer.SetFixedTimeStep(true);
+	m_timer.SetTargetElapsedSeconds(1.0 / 60);
+	*/
+
 	// TODO:初期化処理はここ
 	m_batch = make_unique<PrimitiveBatch<VertexPositionColor>>(m_d3dContext.Get());
 
@@ -76,12 +76,15 @@ void Game::Initialize(HWND window, int width, int height)
 
 	m_states = make_unique<CommonStates>(m_d3dDevice.Get());
 
-	m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
-
+	//m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
+	Vector3 camera_pos = m_head_pos;
+	camera_pos += Vector3(0.0f, 0.0f, 5.0f);
+	m_camera = make_unique<Camera>(camera_pos, Vector3::Zero, Vector3::Up,
+		XMConvertToDegrees(60.0f), static_cast<float>(m_outputWidth) / m_outputHeight, 0.1f, 500.0f);
 
 	m_factory = make_unique<EffectFactory>(m_d3dDevice.Get());
 	m_factory->SetDirectory(L"Recources");		// テクスチャ(.dds)のパス設定
-	m_ground  = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Ground200m.cmo", *m_factory);
+	m_ground = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Ground200m.cmo", *m_factory);
 	m_skydome = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Skydome.cmo", *m_factory);
 	//m_sphere = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Sphere.cmo", *m_factory);
 	m_teapot = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Teapot.cmo", *m_factory);
@@ -93,32 +96,34 @@ void Game::Initialize(HWND window, int width, int height)
 	m_teapot_trans.resize(TEAPOT_NUM);
 	m_teapot_vec.resize(TEAPOT_NUM);
 
-	// 球の初期化
-	//for (int i = 0; i < SPHERE_NUM; ++i)
-	//{
-	//	Matrix trans;
-	//	Matrix rotate;
+	{
+		// 球の初期化
+		//for (int i = 0; i < SPHERE_NUM; ++i)
+		//{
+		//	Matrix trans;
+		//	Matrix rotate;
 
-	//	const  float ANGLE = XM_2PI / (SPHERE_NUM / 2);		// １つごとの角度
+		//	const  float ANGLE = XM_2PI / (SPHERE_NUM / 2);		// １つごとの角度
 
-	//	if (i < (SPHERE_NUM / 2))		// 内側の円
-	//	{
-	//		trans  = Matrix::CreateTranslation(Vector3(20.0f, 0.0f, 0.0f));
-	//		rotate = Matrix::CreateRotationY(ANGLE * i);
-	//	}
-	//	else							// 外側の円
-	//	{
-	//		static auto cnt = 0;
+		//	if (i < (SPHERE_NUM / 2))		// 内側の円
+		//	{
+		//		trans  = Matrix::CreateTranslation(Vector3(20.0f, 0.0f, 0.0f));
+		//		rotate = Matrix::CreateRotationY(ANGLE * i);
+		//	}
+		//	else							// 外側の円
+		//	{
+		//		static auto cnt = 0;
 
-	//		trans  = Matrix::CreateTranslation(Vector3(40.0f, 0.0f, 0.0f));
-	//		rotate = Matrix::CreateRotationY(ANGLE * cnt);
+		//		trans  = Matrix::CreateTranslation(Vector3(40.0f, 0.0f, 0.0f));
+		//		rotate = Matrix::CreateRotationY(ANGLE * cnt);
 
-	//		++cnt;
-	//	}
+		//		++cnt;
+		//	}
 
-	//	// 行列合成。順番大事！S(Scale)R(Rotation)T(Translation)の順番が一般的
-	//	m_sphere_world[i] = trans * rotate;
-	//}
+		//	// 行列合成。順番大事！S(Scale)R(Rotation)T(Translation)の順番が一般的
+		//	m_sphere_world[i] = trans * rotate;
+		//}
+	}
 
 	// 床の初期化
 	for (int i = 0; i < GROUND_WIDTH_HEIGHT; ++i)		// 一応高さ
@@ -182,6 +187,7 @@ void Game::Update(DX::StepTimer const& timer)
 	auto kb = m_keyboard->GetState();
 
 	static float head_angle = 0.0f;
+
 	// モデル移動
 	if (kb.W)		// 前進
 	{
@@ -268,6 +274,23 @@ void Game::Update(DX::StepTimer const& timer)
 	}
 
 	++m_time_frame;
+
+	// カメラの設定
+	const float CAMERA_DIS = 3.0f;
+	Vector3 ref_pos = m_head_pos + Vector3(0, 1, 0);
+	Vector3 camera_pos2(0.0f, 0.0f, CAMERA_DIS);
+
+	Matrix rot = Matrix::CreateRotationY(XMConvertToRadians(head_angle));
+	camera_pos2 = Vector3::TransformNormal(camera_pos2, rot);
+
+	Vector3 camera_pos = ref_pos + camera_pos2;
+
+	m_camera->SetCameraPos(camera_pos);
+	m_camera->SetRefPos(ref_pos);
+
+	m_camera->Update();
+	m_view = m_camera->GetViewMatrix();
+	m_proj = m_camera->GetProjectionMatrix();
 }
 
 // Draws the scene.
@@ -293,12 +316,25 @@ void Game::Render()
 
 	m_world = Matrix::Identity;
 
-	m_view  = m_camera->GetCameraMatrix();
-	m_proj  = Matrix::CreatePerspectiveFieldOfView(XM_PI / 4.f,	// 視野角
-		float(m_outputWidth) / float(m_outputHeight),			// アスペクト比
-		0.1f,			// nearクリップ
-		500.f			// farクリップ
-	);
+	
+	//Vector3 camera_pos(0.0f, 0.0f, 5.0f);	// カメラの位置
+	//Vector3 ref_pos(0.0f, 0.0f, 0.0f);				// どこを見ているか
+	//Vector3 up_vec(0.0f, 1.0f, 0.0f);				// カメラの上方向(長さ１の単位ベクトルを設定)
+	//m_view = Matrix::CreateLookAt(camera_pos, ref_pos, up_vec);
+
+	//m_view  = m_camera->GetCameraMatrix();
+	
+	//float fovY      = XMConvertToDegrees(60.0f);		// 縦方向にどこまで移すか
+	//float aspect    = static_cast<float>(m_outputWidth) / m_outputHeight;
+	//float near_clip = 0.1f;
+	//float far_clip  = 1000.0f;
+
+	//m_proj = Matrix::CreatePerspectiveFieldOfView(fovY, aspect, near_clip, far_clip);
+	//m_proj  = Matrix::CreatePerspectiveFieldOfView(XM_PI / 4.f,	// 視野角
+	//	float(m_outputWidth) / float(m_outputHeight),			// アスペクト比
+	//	0.1f,			// nearクリップ
+	//	500.f			// farクリップ
+	//);
 
 	m_effect->SetWorld(m_world);
 	m_effect->SetView(m_view);
