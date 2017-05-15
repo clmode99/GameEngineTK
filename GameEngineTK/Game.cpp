@@ -79,8 +79,9 @@ void Game::Initialize(HWND window, int width, int height)
 	//m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
 	Vector3 camera_pos = m_head_pos;
 	camera_pos += Vector3(0.0f, 0.0f, 5.0f);
-	m_camera = make_unique<Camera>(camera_pos, Vector3::Zero, Vector3::Up,
-		XMConvertToDegrees(60.0f), static_cast<float>(m_outputWidth) / m_outputHeight, 0.1f, 500.0f);
+	m_camera = make_unique<FollowCamera>(camera_pos, Vector3::Zero, Vector3::Up,
+		XMConvertToDegrees(60.0f), static_cast<float>(m_outputWidth) / m_outputHeight, 0.1f, 500.0f,
+		Vector3::Zero, 0.0f);
 
 	m_factory = make_unique<EffectFactory>(m_d3dDevice.Get());
 	m_factory->SetDirectory(L"Recources");		// テクスチャ(.dds)のパス設定
@@ -276,18 +277,8 @@ void Game::Update(DX::StepTimer const& timer)
 	++m_time_frame;
 
 	// カメラの設定
-	const float CAMERA_DIS = 3.0f;
-	Vector3 ref_pos = m_head_pos + Vector3(0, 1, 0);
-	Vector3 camera_pos2(0.0f, 0.0f, CAMERA_DIS);
-
-	Matrix rot = Matrix::CreateRotationY(XMConvertToRadians(head_angle));
-	camera_pos2 = Vector3::TransformNormal(camera_pos2, rot);
-
-	Vector3 camera_pos = ref_pos + camera_pos2;
-
-	m_camera->SetCameraPos(camera_pos);
-	m_camera->SetRefPos(ref_pos);
-
+	m_camera->SetTargetPos(m_head_pos);
+	m_camera->SetTargetAngle(head_angle);
 	m_camera->Update();
 	m_view = m_camera->GetViewMatrix();
 	m_proj = m_camera->GetProjectionMatrix();

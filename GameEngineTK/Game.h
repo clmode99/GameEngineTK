@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "DebugCamera.h"
-#include "Camera.h"
+#include "FollowCamera.h"
 
 // A basic game implementation that creates a D3D11 device and
 // provides a game loop.
@@ -121,5 +121,7 @@ private:
 	int m_time_frame;
 	int m_auto_move_time_frame;
 
-	std::unique_ptr<Camera> m_camera;
+	// TODO:DebugCamera‚ÆFollowCamera‚ğƒL[‚ÅØ‚è‘Ö‚¦‚ç‚ê‚é‚æ‚¤‚É‚·‚é‚ÆGOOD
+	std::unique_ptr<FollowCamera> m_camera;
+
 };
