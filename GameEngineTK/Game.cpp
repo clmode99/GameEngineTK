@@ -82,6 +82,7 @@ void Game::Initialize(HWND window, int width, int height)
 	m_camera = make_unique<FollowCamera>(camera_pos, Vector3::Zero, Vector3::Up,
 		XMConvertToDegrees(60.0f), static_cast<float>(m_outputWidth) / m_outputHeight, 0.1f, 500.0f,
 		Vector3::Zero, 0.0f);
+	m_camera->SetKeyboard(m_keyboard.get());
 
 	m_factory = make_unique<EffectFactory>(m_d3dDevice.Get());
 	m_factory->SetDirectory(L"Recources");		// テクスチャ(.dds)のパス設定
