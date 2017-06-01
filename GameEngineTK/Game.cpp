@@ -9,6 +9,8 @@
 #include <iterator>
 #include <sstream>
 
+#include <WICTextureLoader.h>
+
 extern void ExitGame();
 
 using namespace std;
@@ -19,7 +21,6 @@ using namespace DirectX::SimpleMath;
 using Microsoft::WRL::ComPtr;
 
 //const int Game::SPHERE_NUM = 20;			// 球の数
-const int Game::TEAPOT_NUM = 20;			// ティーポットの数
 const int Game::GROUND_WIDTH_HEIGHT = 200;	// 床の幅と高さ
 const int Game::GROUND_NUM = Game::GROUND_WIDTH_HEIGHT*Game::GROUND_WIDTH_HEIGHT;	// 床の数
 
@@ -28,8 +29,20 @@ Game::Game() :
     m_window(0),
     m_outputWidth(800),
     m_outputHeight(600),
-    m_featureLevel(D3D_FEATURE_LEVEL_9_1)
+    m_featureLevel(D3D_FEATURE_LEVEL_9_1),
+	m_skydome(new Obj3D()),
+	m_ground(new Obj3D()),
+	m_camera(nullptr)
 {
+	m_obj.resize(PARTS_NUM);
+	for (auto itr = m_obj.begin(); itr != m_obj.end(); ++itr)
+		*itr = new Obj3D();
+}
+
+Game::~Game()
+{
+	delete m_skydome;	m_skydome = nullptr;
+	delete m_camera;	m_camera = nullptr;
 }
 
 // Initialize the Direct3D resources required to run.
@@ -74,29 +87,24 @@ void Game::Initialize(HWND window, int width, int height)
 		shaderByteCode, byteCodeLength,
 		m_inputLayout.GetAddressOf());
 
-	m_states = make_unique<CommonStates>(m_d3dDevice.Get());
-
-	//m_camera = make_unique<DebugCamera>(m_outputWidth, m_outputHeight);
-	Vector3 camera_pos = m_head_pos;
+	Vector3 camera_pos;
 	camera_pos += Vector3(0.0f, 0.0f, 5.0f);
-	m_camera = make_unique<FollowCamera>(camera_pos, Vector3::Zero, Vector3::Up,
+	m_camera = new FollowCamera(camera_pos, Vector3::Zero, Vector3::Up,
 		XMConvertToDegrees(60.0f), static_cast<float>(m_outputWidth) / m_outputHeight, 0.1f, 500.0f,
 		Vector3::Zero, 0.0f);
 	m_camera->SetKeyboard(m_keyboard.get());
 
 	m_factory = make_unique<EffectFactory>(m_d3dDevice.Get());
-	m_factory->SetDirectory(L"Recources");		// テクスチャ(.dds)のパス設定
-	m_ground = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Ground200m.cmo", *m_factory);
-	m_skydome = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Skydome.cmo", *m_factory);
-	//m_sphere = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Sphere.cmo", *m_factory);
-	m_teapot = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Teapot.cmo", *m_factory);
-	m_head = Model::CreateFromCMO(m_d3dDevice.Get(), L"Recources/Head.cmo", *m_factory);
+	m_states = make_unique<CommonStates>(m_d3dDevice.Get());
+
+	/* ※Obj3Dはこれより下で使うこと！！ */
+	Obj3D::Initialize(m_d3dDevice, m_d3dContext, m_camera);
+
+	m_skydome->LoadModelCMO(L"Recources/Skydome.cmo");
 
 	//m_sphere_world.resize(SPHERE_NUM);
 	m_ground_world.resize(GROUND_NUM);
-	m_teapot_world.resize(TEAPOT_NUM);
-	m_teapot_trans.resize(TEAPOT_NUM);
-	m_teapot_vec.resize(TEAPOT_NUM);
+	//m_ground.resize(GROUND_NUM);
 
 	{
 		// 球の初期化
@@ -128,6 +136,7 @@ void Game::Initialize(HWND window, int width, int height)
 	}
 
 	// 床の初期化
+	// ワールド行列作成
 	for (int i = 0; i < GROUND_WIDTH_HEIGHT; ++i)		// 一応高さ
 	{
 		for (int j = 0; j < GROUND_WIDTH_HEIGHT; ++j)	// 一応幅
@@ -138,29 +147,31 @@ void Game::Initialize(HWND window, int width, int height)
 			m_ground_world[(i*GROUND_WIDTH_HEIGHT) + j] = sort * trans;
 		}
 	}
+	// 床モデル読み込み
+	m_ground->LoadModelCMO(L"Recources/Ground200m.cmo");
 
-	// ティーポットの座標決定
-	srand(static_cast<unsigned int>(time(nullptr)));
+	m_obj[PARTS_BODY]->LoadModelCMO(L"Recources/Body.cmo");
+	m_obj[PARTS_HEAD]->LoadModelCMO(L"Recources/Head.cmo");
+	m_obj[PARTS_LEFT_LEG]->LoadModelCMO(L"Recources/Leg.cmo");
+	m_obj[PARTS_RIGHT_LEG]->LoadModelCMO(L"Recources/Leg.cmo");
 
-	for (int i = 0; i < TEAPOT_NUM; ++i)
-	{
-		Matrix trans;
+	// 親子関係設定
+	m_obj[PARTS_HEAD]->SetParentObj3D(m_obj[PARTS_BODY]);
+	m_obj[PARTS_LEFT_LEG]->SetParentObj3D(m_obj[PARTS_BODY]);
+	m_obj[PARTS_RIGHT_LEG]->SetParentObj3D(m_obj[PARTS_BODY]);
 
-		// 角度決定
-		float angle_radian = XMConvertToRadians(rand() % 361);		// ０～３６０の間の角度を取得
-		Vector3 vec(cosf(angle_radian), 0.0f, sinf(angle_radian));
-		m_teapot_vec[i] = vec;
+	// 座標のずれ(オフセット)を設定
+	m_obj[PARTS_BODY]->SetTranslation(Vector3::Zero);
+	m_obj[PARTS_HEAD]->SetTranslation(Vector3(0.0f, 0.52f, 0.0f));
+	m_obj[PARTS_LEFT_LEG]->SetTranslation(Vector3(-0.33f, 0.4f, 0.0f));
+	m_obj[PARTS_RIGHT_LEG]->SetTranslation(Vector3(0.33f, 0.4f, 0.0f));
 
-		// 距離決定
-		float dir = static_cast<float>(rand() % 96);		// ０～９５の間の距離を取得
-		m_teapot_vec[i] *= dir;
+	// 色々微調整
+	m_obj[PARTS_LEFT_LEG]->SetScale(Vector3(0.8f, 0.8f, 0.8f));
+	m_obj[PARTS_RIGHT_LEG]->SetScale(Vector3(0.8f, 0.8f, 0.8f));
 
-		m_teapot_trans[i] =  Matrix::CreateTranslation(m_teapot_vec[i]);
-
-	}
-	m_time_frame = 0;
-	m_auto_move_time_frame = 0;
-
+	// UI設定
+	DX::ThrowIfFailed(CreateWICTextureFromFile(m_d3dDevice.Get(), L"Recources/ui.png", nullptr, m_ui.ReleaseAndGetAddressOf()));
 }
 
 // Executes the basic game loop.
@@ -183,106 +194,103 @@ void Game::Update(DX::StepTimer const& timer)
     elapsedTime;
 
 	// TODO:更新処理
-	m_camera->Update();
-
 	// キーボード更新
 	auto kb = m_keyboard->GetState();
 
-	static float head_angle = 0.0f;
+	m_skydome->Update();
+	m_ground->Update();
+
+	static float angle_radian = 0.0f;		// ラジアン値
+	static float sin_angle = 0;				// サインカーブに使う値(作業用)
 
 	// モデル移動
-	if (kb.W)		// 前進
 	{
-		//Vector3 move_front(0.0f, 0.0f, -0.1f);
-		Vector3 move_front2(cosf(XMConvertToRadians(90 - head_angle)), 0.0f, sinf(XMConvertToRadians(90 - head_angle)));
-		move_front2.Normalize();
-		move_front2 *= -0.1f;
-		m_head_pos += move_front2;
+		// 腕回転の初期化
+		m_obj[PARTS_LEFT_LEG]->SetRotate(Vector3::Zero);
+		m_obj[PARTS_RIGHT_LEG]->SetRotate(Vector3::Zero);
+		m_obj[PARTS_HEAD]->SetRotate(Vector3::Zero);
+
+		if (kb.W)		// 前進
+		{
+			Vector3 moveV(0.0f, 0.0f, -0.1f);		// 移動量
+			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
+			Matrix rotate = Matrix::CreateRotationY(angle_radian);
+			moveV = Vector3::TransformNormal(moveV, rotate);
+			Vector3 pos = m_obj[PARTS_BODY]->GetTranslation();
+			m_obj[PARTS_BODY]->SetTranslation(pos + moveV);
+
+			/* 腕の回転 */
+			sin_angle += 0.2f;													// ここで速さ調整
+			float sin_angle_radian = sinf(sin_angle) * XMConvertToRadians(20);	// ここで角度調整
+			
+			// 左腕
+			Vector3 leg_angle_left = m_obj[PARTS_LEFT_LEG]->GetRotate();
+			m_obj[PARTS_LEFT_LEG]->SetRotate(Vector3(leg_angle_left.x + sin_angle_radian, leg_angle_left.y, leg_angle_left.z));
+
+			// 右腕
+			Vector3 leg_angle_right = m_obj[PARTS_RIGHT_LEG]->GetRotate();
+			m_obj[PARTS_RIGHT_LEG]->SetRotate(Vector3(leg_angle_right.x - sin_angle_radian, leg_angle_right.y, leg_angle_right.z));
+		}
+		if (kb.S)		// 後退
+		{
+			Vector3 moveV(0.0f, 0.0f, 0.1f);
+			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
+			Matrix rotate = Matrix::CreateRotationY(angle_radian);
+			moveV = Vector3::TransformNormal(moveV, rotate);
+			Vector3 pos = m_obj[PARTS_BODY]->GetTranslation();
+			m_obj[PARTS_BODY]->SetTranslation(pos + moveV);
+
+			/* 腕の回転 */
+			sin_angle += 0.2f;													// ここで速さ調整
+			float sin_angle_radian = sinf(sin_angle) * XMConvertToRadians(20);	// ここで角度調整
+
+			// 左腕
+			Vector3 leg_angle_left = m_obj[PARTS_LEFT_LEG]->GetRotate();
+			m_obj[PARTS_LEFT_LEG]->SetRotate(Vector3(leg_angle_left.x + sin_angle_radian, leg_angle_left.y, leg_angle_left.z));
+
+			// 右腕
+			Vector3 leg_angle_right = m_obj[PARTS_RIGHT_LEG]->GetRotate();
+			m_obj[PARTS_RIGHT_LEG]->SetRotate(Vector3(leg_angle_right.x - sin_angle_radian, leg_angle_right.y, leg_angle_right.z));
+		}
+		if (kb.A)		// 左旋回
+		{
+			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
+			angle_radian += 0.02f;
+			m_obj[PARTS_BODY]->SetRotate(Vector3(0.0f, angle_radian, 0.0f));
+
+			// 視線を左に変える
+			const float HEAD_ANGLE_LEFT_RADIAN = 0.1f;
+			m_obj[PARTS_HEAD]->SetRotate(Vector3(0.0f, HEAD_ANGLE_LEFT_RADIAN, 0.0f));
+		}
+		if (kb.D)		// 右旋回
+		{
+			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
+			angle_radian -= 0.02f;
+			m_obj[PARTS_BODY]->SetRotate(Vector3(0.0f, angle_radian, 0.0f));
+
+			// 視線を右に変える
+			const float HEAD_ANGLE_RIGHT_RADIAN = - 0.1f;
+			m_obj[PARTS_HEAD]->SetRotate(Vector3(0.0f, HEAD_ANGLE_RIGHT_RADIAN, 0.0f));
+		}
 	}
-	if (kb.S)		// 後退
+
+	// モデル更新
+	for (auto itr = m_obj.begin(); itr != m_obj.end(); ++itr)
+		(*itr)->Update();
+
+	/* カメラ設定。将来デバッグカメラと切り替えられるように */
+	if (typeid(m_camera) == typeid(FollowCamera*))
 	{
-		//Vector3 move_back(0.0f, 0.0f, 0.1f);
-		Vector3 move_back2(cosf(XMConvertToRadians(90 - head_angle)), 0.0f, sinf(XMConvertToRadians(90 - head_angle)));
-		move_back2.Normalize();
-		move_back2 *= 0.1f;
-		m_head_pos += move_back2;
+		FollowCamera* fc = dynamic_cast<FollowCamera*>(m_camera);
+		fc->SetTargetAngle(angle_radian);
+		fc->SetTargetPos(m_obj[PARTS_BODY]->GetTranslation());
 	}
-
-	if (kb.A)		// 左旋回
-	{
-		++head_angle;
-	}
-	if (kb.D)		// 右旋回
-	{
-		--head_angle;
-	}
-	Matrix head_trans        = Matrix::CreateTranslation(m_head_pos);
-	m_head_world_rotate = Matrix::CreateRotationY(XMConvertToRadians(head_angle));
-	m_head_world = m_head_world_rotate * head_trans;	// ワールド行列変換
-
-	// ワールド行列を計算
-	//Matrix double_scale = Matrix::CreateScale(2.0f);								// 拡大縮小
-	//Matrix trans        = Matrix::CreateTranslation(Vector3(0.0f, 10.0f, 0.0f));	// 移動
-	//Matrix rotate_z     = Matrix::CreateRotationZ(3.14f);							// 回転
-
-	// 回転させる行列計算
-	//for (int i = 0; i < SPHERE_NUM; ++i)
-	//{
-	//	int angle   = 1;
-	//	int angle_r = -1;
-
-	//	Matrix rotate;
-
-	//	if (i < (SPHERE_NUM / 2))		// 内側の円
-	//	{
-	//		rotate = Matrix::CreateRotationY(XMConvertToRadians(angle));
-	//	}
-	//	else							// 外側の円
-	//	{
-	//		rotate = Matrix::CreateRotationY(XMConvertToRadians(angle_r));
-	//	}
-
-	//	m_sphere_world[i] *= rotate;
-
-	//}
-
-	// ティーポットの行列更新
-	static float angle_radian = 0.0f;		// スケール
-	angle_radian += 0.02f;
-	float angle_scale = ((sinf(angle_radian) + 1.0f)*2.0f) + 1.0f;		//１～５倍間を行ったり来たり
-
-	float time_step = (m_time_frame - m_auto_move_time_frame) / 600.0f;		// 10秒＝600フレーム
-
-	// デバッグ
-	wstringstream ss;
-	ss << L"TimeStep:"<<time_step << endl;		// サイン角度表示
-
-	m_wstr = ss.str();
-
-	for (int i = 0; i < TEAPOT_NUM; ++i)
-	{		
-		// Y軸に回転
-		Matrix rotate_y = Matrix::CreateRotationY(angle_radian);
-
-		// スケーリング
-		Matrix scale = Matrix::CreateScale(angle_scale);
-
-		// 線形補間で移動
-		Matrix trans;
-		if (time_step < 1.0f)
-			trans = Matrix::CreateTranslation(Vector3::Lerp(m_teapot_vec[i], Vector3::Zero, time_step));
-
-		m_teapot_world[i] = scale * rotate_y * trans;
-	}
-
-	++m_time_frame;
-
-	// カメラの設定
-	m_camera->SetTargetPos(m_head_pos);
-	m_camera->SetTargetAngle(head_angle);
+	
 	m_camera->Update();
+
 	m_view = m_camera->GetViewMatrix();
 	m_proj = m_camera->GetProjectionMatrix();
+
 }
 
 // Draws the scene.
@@ -301,33 +309,6 @@ void Game::Render()
 	m_d3dContext->OMSetDepthStencilState(m_states->DepthNone(), 0);
 	m_d3dContext->RSSetState(m_states->CullNone());
 
-	//m_view = Matrix::CreateLookAt(Vector3(0.f, 0.f, 2.f),	// カメラ視点
-	//		 Vector3(0, 0, 0),		// カメラ参照点
-	//		 Vector3(0, 1, 0)		// 画面の上方向ベクトル
-	//);
-
-	m_world = Matrix::Identity;
-
-	
-	//Vector3 camera_pos(0.0f, 0.0f, 5.0f);	// カメラの位置
-	//Vector3 ref_pos(0.0f, 0.0f, 0.0f);				// どこを見ているか
-	//Vector3 up_vec(0.0f, 1.0f, 0.0f);				// カメラの上方向(長さ１の単位ベクトルを設定)
-	//m_view = Matrix::CreateLookAt(camera_pos, ref_pos, up_vec);
-
-	//m_view  = m_camera->GetCameraMatrix();
-	
-	//float fovY      = XMConvertToDegrees(60.0f);		// 縦方向にどこまで移すか
-	//float aspect    = static_cast<float>(m_outputWidth) / m_outputHeight;
-	//float near_clip = 0.1f;
-	//float far_clip  = 1000.0f;
-
-	//m_proj = Matrix::CreatePerspectiveFieldOfView(fovY, aspect, near_clip, far_clip);
-	//m_proj  = Matrix::CreatePerspectiveFieldOfView(XM_PI / 4.f,	// 視野角
-	//	float(m_outputWidth) / float(m_outputHeight),			// アスペクト比
-	//	0.1f,			// nearクリップ
-	//	500.f			// farクリップ
-	//);
-
 	m_effect->SetWorld(m_world);
 	m_effect->SetView(m_view);
 	m_effect->SetProjection(m_proj);
@@ -335,32 +316,18 @@ void Game::Render()
 	m_effect->Apply(m_d3dContext.Get());
 	m_d3dContext->IASetInputLayout(m_inputLayout.Get());
 
-	//m_ground ->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);		// 第６引数をtrueにするとワイヤー表示になる(デフォルトはfalse)
-	m_skydome->Draw(m_d3dContext.Get(), *m_states, m_world, m_view, m_proj);
+	m_skydome->Draw();
+	m_ground->Draw();
+	for (auto itr = m_obj.begin(); itr != m_obj.end(); ++itr)
+		(*itr)->Draw();
 
-	//for (vector<Matrix>::iterator i = m_sphere_world.begin(); i != m_sphere_world.end(); ++i)
-	//{
-	//	m_sphere->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
-	//}
+	m_sprite_batch->Begin(SpriteSortMode_Deferred,m_states->NonPremultiplied());
 
-	// forで回す単純な地面の描画(かなり重い)
-	//for (vector<Matrix>::iterator i = m_ground_world.begin(); i != m_ground_world.end(); ++i)
-	//{
-	//	m_ground->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
-	//}
+	// TODO:デバッグ文字表示
+	m_sprite_font->DrawString(m_sprite_batch.get(), m_wstr.c_str(), XMFLOAT2(0, 0));
 
-	m_ground->Draw(m_d3dContext.Get(), *m_states, Matrix::Identity, m_view, m_proj);		// タイリングした地面を描画
-	
-	//for (vector<Matrix>::iterator i = m_teapot_world.begin(); i != m_teapot_world.end(); ++i)
-	//{
-	//	m_teapot->Draw(m_d3dContext.Get(), *m_states, *i, m_view, m_proj);
-	//}
-
-	m_head->Draw(m_d3dContext.Get(), *m_states, m_head_world, m_view, m_proj);
-
-	m_sprite_batch->Begin();
-
-	//m_sprite_font->DrawString(m_sprite_batch.get(), m_wstr.c_str(), XMFLOAT2(0, 0));
+	RECT rect{ 0,0,638,456 };
+	m_sprite_batch->Draw(m_ui.Get(), rect, nullptr, Colors::White, 0.f);
 
 	m_sprite_batch->End();
 

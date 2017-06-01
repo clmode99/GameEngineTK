@@ -18,16 +18,29 @@
 
 #include <vector>
 
+/* TODO:ポインタで持たせことでインクルードを減らす */
 #include "DebugCamera.h"
 #include "FollowCamera.h"
+#include "Obj3D.h"
 
 // A basic game implementation that creates a D3D11 device and
 // provides a game loop.
 class Game
 {
 public:
+	// パーツの種類
+	enum PARTS
+	{
+		PARTS_BODY,
+		PARTS_HEAD,
+		PARTS_LEFT_LEG,
+		PARTS_RIGHT_LEG,
+
+		PARTS_NUM,			// パーツの数
+	};
 
     Game();
+	~Game();
 
     // Initialization and management
     void Initialize(HWND window, int width, int height);
@@ -80,37 +93,19 @@ private:
 	std::unique_ptr<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>> m_batch;
 	std::unique_ptr<DirectX::BasicEffect>      m_effect;
 	std::unique_ptr<DirectX::CommonStates>     m_states;		// 汎用ステート
+	std::unique_ptr<DirectX::EffectFactory>      m_factory;
 	Microsoft::WRL::ComPtr<ID3D11InputLayout>  m_inputLayout;
 
 	DirectX::SimpleMath::Matrix m_world;
 	DirectX::SimpleMath::Matrix m_view;
 	DirectX::SimpleMath::Matrix m_proj;		// 射影行列
-
-	//std::unique_ptr<DebugCamera>            m_camera;
-
-	std::unique_ptr<DirectX::EffectFactory>   m_factory;		// エフェクトファクトリー(モデル描画に必要)
 	
 	static const int GROUND_NUM;
 	static const int GROUND_WIDTH_HEIGHT;
-	std::unique_ptr<DirectX::Model>           m_ground;			// 地面
+	Obj3D*           m_ground;			// 地面
 	std::vector<DirectX::SimpleMath::Matrix>  m_ground_world;	// 地面用のワールド行列
 
-	std::unique_ptr<DirectX::Model>         m_skydome;		// 天球
-
-	//static const int SPHERE_NUM;
-	//std::unique_ptr<DirectX::Model>           m_sphere;			// 球
-	//std::vector<DirectX::SimpleMath::Matrix>  m_sphere_world;		// 球用のワールド行列
-
-	static const int TEAPOT_NUM;
-	std::unique_ptr<DirectX::Model> m_teapot;					// ティーポット
-	std::vector<DirectX::SimpleMath::Matrix>  m_teapot_world;	// 球用のワールド行列
-	std::vector<DirectX::SimpleMath::Matrix>  m_teapot_trans;	// 球用の移動行列
-	std::vector<DirectX::SimpleMath::Vector3> m_teapot_vec;	// 球用の移動行列(Vector3版)
-
-	std::unique_ptr<DirectX::Model> m_head;		// ロボあたま
-	DirectX::SimpleMath::Vector3    m_head_pos;
-	DirectX::SimpleMath::Matrix     m_head_world;
-	DirectX::SimpleMath::Matrix     m_head_world_rotate;
+	Obj3D*        m_skydome;		// 天球
 
 	std::unique_ptr<DirectX::SpriteBatch>  m_sprite_batch;
 	std::unique_ptr<DirectX::SpriteFont>   m_sprite_font;
@@ -118,10 +113,10 @@ private:
 	
 	std::unique_ptr<DirectX::Keyboard> m_keyboard;		// キーボード
 
-	int m_time_frame;
-	int m_auto_move_time_frame;
-
 	// TODO:DebugCameraとFollowCameraをキーで切り替えられるようにするとGOOD
-	std::unique_ptr<FollowCamera> m_camera;
+	FollowCamera* m_camera;
 
+	std::vector<Obj3D*> m_obj;
+
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_ui;// UI
 };

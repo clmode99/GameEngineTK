@@ -13,6 +13,7 @@
     <ClInclude Include="DebugCamera.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="FollowCamera.h" />
+    <ClInclude Include="Obj3D.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -21,6 +22,7 @@
     <ClCompile Include="DebugCamera.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="FollowCamera.cpp" />
+    <ClCompile Include="Obj3D.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource.rc" />
@@ -52,6 +54,12 @@
       <Filter>Assets</Filter>
     </MeshContentTask>
     <MeshContentTask Include="Assets\Head.FBX">
+      <Filter>Assets</Filter>
+    </MeshContentTask>
+    <MeshContentTask Include="Assets\Leg.FBX">
+      <Filter>Assets</Filter>
+    </MeshContentTask>
+    <MeshContentTask Include="Assets\Body.FBX">
       <Filter>Assets</Filter>
     </MeshContentTask>
   </ItemGroup>

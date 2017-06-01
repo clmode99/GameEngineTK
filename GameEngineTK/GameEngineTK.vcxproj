@@ -170,6 +170,7 @@
     <ClInclude Include="DebugCamera.h" />
     <ClInclude Include="FollowCamera.h" />
     <ClInclude Include="Game.h" />
+    <ClInclude Include="Obj3D.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="StepTimer.h" />
   </ItemGroup>
@@ -179,6 +180,7 @@
     <ClCompile Include="FollowCamera.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Obj3D.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -201,9 +203,11 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <MeshContentTask Include="Assets\Body.FBX" />
     <MeshContentTask Include="Assets\Ground1m.FBX" />
     <MeshContentTask Include="Assets\Ground200m.FBX" />
     <MeshContentTask Include="Assets\Head.FBX" />
+    <MeshContentTask Include="Assets\Leg.FBX" />
     <MeshContentTask Include="Assets\Skydome.FBX" />
     <MeshContentTask Include="Assets\Sphere.FBX" />
     <MeshContentTask Include="Assets\Teapot.FBX" />
