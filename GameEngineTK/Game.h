@@ -23,22 +23,13 @@
 #include "FollowCamera.h"
 #include "Obj3D.h"
 
+class Character;
+
 // A basic game implementation that creates a D3D11 device and
 // provides a game loop.
 class Game
 {
 public:
-	// パーツの種類
-	enum PARTS
-	{
-		PARTS_BODY,
-		PARTS_HEAD,
-		PARTS_LEFT_LEG,
-		PARTS_RIGHT_LEG,
-
-		PARTS_NUM,			// パーツの数
-	};
-
     Game();
 	~Game();
 
@@ -116,7 +107,9 @@ private:
 	// TODO:DebugCameraとFollowCameraをキーで切り替えられるようにするとGOOD
 	FollowCamera* m_camera;
 
-	std::vector<Obj3D*> m_obj;
+	static const int ENEMY_NUM;
+	std::unique_ptr<Character> m_player;
+	std::vector<std::unique_ptr<Character>> m_enemy;
 
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_ui;// UI
 };

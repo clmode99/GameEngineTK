@@ -9,6 +9,9 @@
 #include <iterator>
 #include <sstream>
 
+#include "Player.h"
+#include "Enemy.h"
+
 #include <WICTextureLoader.h>
 
 extern void ExitGame();
@@ -24,6 +27,7 @@ using Microsoft::WRL::ComPtr;
 const int Game::GROUND_WIDTH_HEIGHT = 200;	// 床の幅と高さ
 const int Game::GROUND_NUM = Game::GROUND_WIDTH_HEIGHT*Game::GROUND_WIDTH_HEIGHT;	// 床の数
 
+const int Game::ENEMY_NUM = 5;
 
 Game::Game() :
     m_window(0),
@@ -34,9 +38,7 @@ Game::Game() :
 	m_ground(new Obj3D()),
 	m_camera(nullptr)
 {
-	m_obj.resize(PARTS_NUM);
-	for (auto itr = m_obj.begin(); itr != m_obj.end(); ++itr)
-		*itr = new Obj3D();
+	srand(static_cast<unsigned int>(time(nullptr)));
 }
 
 Game::~Game()
@@ -150,25 +152,17 @@ void Game::Initialize(HWND window, int width, int height)
 	// 床モデル読み込み
 	m_ground->LoadModelCMO(L"Recources/Ground200m.cmo");
 
-	m_obj[PARTS_BODY]->LoadModelCMO(L"Recources/Body.cmo");
-	m_obj[PARTS_HEAD]->LoadModelCMO(L"Recources/Head.cmo");
-	m_obj[PARTS_LEFT_LEG]->LoadModelCMO(L"Recources/Leg.cmo");
-	m_obj[PARTS_RIGHT_LEG]->LoadModelCMO(L"Recources/Leg.cmo");
+	// プレイヤー初期化
+	m_player = make_unique<Player>(move(m_keyboard));
+	m_camera->SetPlayer(dynamic_cast<Player*>(m_player.get()));
 
-	// 親子関係設定
-	m_obj[PARTS_HEAD]->SetParentObj3D(m_obj[PARTS_BODY]);
-	m_obj[PARTS_LEFT_LEG]->SetParentObj3D(m_obj[PARTS_BODY]);
-	m_obj[PARTS_RIGHT_LEG]->SetParentObj3D(m_obj[PARTS_BODY]);
+	// 敵初期化
+	m_enemy.resize(ENEMY_NUM);
+	//for (auto itr = m_enemy.begin(); itr != m_enemy.end(); ++itr)
+	//	*itr = make_unique<Enemy>(move(m_keyboard));
 
-	// 座標のずれ(オフセット)を設定
-	m_obj[PARTS_BODY]->SetTranslation(Vector3::Zero);
-	m_obj[PARTS_HEAD]->SetTranslation(Vector3(0.0f, 0.52f, 0.0f));
-	m_obj[PARTS_LEFT_LEG]->SetTranslation(Vector3(-0.33f, 0.4f, 0.0f));
-	m_obj[PARTS_RIGHT_LEG]->SetTranslation(Vector3(0.33f, 0.4f, 0.0f));
-
-	// 色々微調整
-	m_obj[PARTS_LEFT_LEG]->SetScale(Vector3(0.8f, 0.8f, 0.8f));
-	m_obj[PARTS_RIGHT_LEG]->SetScale(Vector3(0.8f, 0.8f, 0.8f));
+	for (auto& e : m_enemy)
+		e = make_unique<Enemy>();
 
 	// UI設定
 	DX::ThrowIfFailed(CreateWICTextureFromFile(m_d3dDevice.Get(), L"Recources/ui.png", nullptr, m_ui.ReleaseAndGetAddressOf()));
@@ -194,98 +188,17 @@ void Game::Update(DX::StepTimer const& timer)
     elapsedTime;
 
 	// TODO:更新処理
-	// キーボード更新
-	auto kb = m_keyboard->GetState();
-
 	m_skydome->Update();
 	m_ground->Update();
 
-	static float angle_radian = 0.0f;		// ラジアン値
-	static float sin_angle = 0;				// サインカーブに使う値(作業用)
-
-	// モデル移動
-	{
-		// 腕回転の初期化
-		m_obj[PARTS_LEFT_LEG]->SetRotate(Vector3::Zero);
-		m_obj[PARTS_RIGHT_LEG]->SetRotate(Vector3::Zero);
-		m_obj[PARTS_HEAD]->SetRotate(Vector3::Zero);
-
-		if (kb.W)		// 前進
-		{
-			Vector3 moveV(0.0f, 0.0f, -0.1f);		// 移動量
-			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
-			Matrix rotate = Matrix::CreateRotationY(angle_radian);
-			moveV = Vector3::TransformNormal(moveV, rotate);
-			Vector3 pos = m_obj[PARTS_BODY]->GetTranslation();
-			m_obj[PARTS_BODY]->SetTranslation(pos + moveV);
-
-			/* 腕の回転 */
-			sin_angle += 0.2f;													// ここで速さ調整
-			float sin_angle_radian = sinf(sin_angle) * XMConvertToRadians(20);	// ここで角度調整
-			
-			// 左腕
-			Vector3 leg_angle_left = m_obj[PARTS_LEFT_LEG]->GetRotate();
-			m_obj[PARTS_LEFT_LEG]->SetRotate(Vector3(leg_angle_left.x + sin_angle_radian, leg_angle_left.y, leg_angle_left.z));
-
-			// 右腕
-			Vector3 leg_angle_right = m_obj[PARTS_RIGHT_LEG]->GetRotate();
-			m_obj[PARTS_RIGHT_LEG]->SetRotate(Vector3(leg_angle_right.x - sin_angle_radian, leg_angle_right.y, leg_angle_right.z));
-		}
-		if (kb.S)		// 後退
-		{
-			Vector3 moveV(0.0f, 0.0f, 0.1f);
-			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
-			Matrix rotate = Matrix::CreateRotationY(angle_radian);
-			moveV = Vector3::TransformNormal(moveV, rotate);
-			Vector3 pos = m_obj[PARTS_BODY]->GetTranslation();
-			m_obj[PARTS_BODY]->SetTranslation(pos + moveV);
-
-			/* 腕の回転 */
-			sin_angle += 0.2f;													// ここで速さ調整
-			float sin_angle_radian = sinf(sin_angle) * XMConvertToRadians(20);	// ここで角度調整
-
-			// 左腕
-			Vector3 leg_angle_left = m_obj[PARTS_LEFT_LEG]->GetRotate();
-			m_obj[PARTS_LEFT_LEG]->SetRotate(Vector3(leg_angle_left.x + sin_angle_radian, leg_angle_left.y, leg_angle_left.z));
-
-			// 右腕
-			Vector3 leg_angle_right = m_obj[PARTS_RIGHT_LEG]->GetRotate();
-			m_obj[PARTS_RIGHT_LEG]->SetRotate(Vector3(leg_angle_right.x - sin_angle_radian, leg_angle_right.y, leg_angle_right.z));
-		}
-		if (kb.A)		// 左旋回
-		{
-			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
-			angle_radian += 0.02f;
-			m_obj[PARTS_BODY]->SetRotate(Vector3(0.0f, angle_radian, 0.0f));
-
-			// 視線を左に変える
-			const float HEAD_ANGLE_LEFT_RADIAN = 0.1f;
-			m_obj[PARTS_HEAD]->SetRotate(Vector3(0.0f, HEAD_ANGLE_LEFT_RADIAN, 0.0f));
-		}
-		if (kb.D)		// 右旋回
-		{
-			angle_radian = m_obj[PARTS_BODY]->GetRotate().y;
-			angle_radian -= 0.02f;
-			m_obj[PARTS_BODY]->SetRotate(Vector3(0.0f, angle_radian, 0.0f));
-
-			// 視線を右に変える
-			const float HEAD_ANGLE_RIGHT_RADIAN = - 0.1f;
-			m_obj[PARTS_HEAD]->SetRotate(Vector3(0.0f, HEAD_ANGLE_RIGHT_RADIAN, 0.0f));
-		}
-	}
-
-	// モデル更新
-	for (auto itr = m_obj.begin(); itr != m_obj.end(); ++itr)
-		(*itr)->Update();
-
-	/* カメラ設定。将来デバッグカメラと切り替えられるように */
-	if (typeid(m_camera) == typeid(FollowCamera*))
-	{
-		FollowCamera* fc = dynamic_cast<FollowCamera*>(m_camera);
-		fc->SetTargetAngle(angle_radian);
-		fc->SetTargetPos(m_obj[PARTS_BODY]->GetTranslation());
-	}
+	m_player->Update();
 	
+	//for (auto itr = m_enemy.begin(); itr != m_enemy.end(); ++itr)
+	//	(*itr)->Update();
+
+	for (auto& e : m_enemy)
+		e->Update();
+
 	m_camera->Update();
 
 	m_view = m_camera->GetViewMatrix();
@@ -318,8 +231,12 @@ void Game::Render()
 
 	m_skydome->Draw();
 	m_ground->Draw();
-	for (auto itr = m_obj.begin(); itr != m_obj.end(); ++itr)
-		(*itr)->Draw();
+	m_player->Draw();
+	//for (auto itr = m_enemy.begin(); itr != m_enemy.end(); ++itr)
+	//	(*itr)->Draw();
+
+	for (auto& e : m_enemy)
+		e->Draw();
 
 	m_sprite_batch->Begin(SpriteSortMode_Deferred,m_states->NonPremultiplied());
 
