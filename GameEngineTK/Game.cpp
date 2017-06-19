@@ -193,9 +193,6 @@ void Game::Update(DX::StepTimer const& timer)
 
 	m_player->Update();
 	
-	//for (auto itr = m_enemy.begin(); itr != m_enemy.end(); ++itr)
-	//	(*itr)->Update();
-
 	for (auto& e : m_enemy)
 		e->Update();
 
@@ -232,8 +229,6 @@ void Game::Render()
 	m_skydome->Draw();
 	m_ground->Draw();
 	m_player->Draw();
-	//for (auto itr = m_enemy.begin(); itr != m_enemy.end(); ++itr)
-	//	(*itr)->Draw();
 
 	for (auto& e : m_enemy)
 		e->Draw();
