@@ -196,6 +196,33 @@ void Game::Update(DX::StepTimer const& timer)
 	for (auto& e : m_enemy)
 		e->Update();
 
+	// “–‚½‚è”»’è
+	const Sphere& player_collision = (dynamic_cast<Player*>(m_player.get()))->GetCollision();
+
+	/*for (auto& e : m_enemy)
+	{
+		const Sphere& enemy_collision = (dynamic_cast<Enemy*>(e.get())->GetCollision());
+		
+		if (CheckSphereToSphere(player_collision, enemy_collision))
+		{
+			dynamic_cast<Player*>(m_player.get())->ShotReset();
+			e.reset();
+		}
+	}*/
+
+	for (auto itr = m_enemy.begin(); itr != m_enemy.end();)
+	{
+		const Sphere& enemy_collision = (dynamic_cast<Enemy*>(itr->get()))->GetCollision();
+
+		if (CheckSphereToSphere(player_collision, enemy_collision))
+		{
+			dynamic_cast<Player*>(m_player.get())->ShotReset();
+			itr = m_enemy.erase(itr);
+		}
+		else
+			++itr;
+	}
+
 	m_camera->Update();
 
 	m_view = m_camera->GetViewMatrix();
